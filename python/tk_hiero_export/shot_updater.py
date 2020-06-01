@@ -20,6 +20,9 @@ from . import (
     HieroUpdateCuts,
 )
 
+UPDATE_TAG_NAME = "plate" # name of tag that will warrant a shot update (donat)
+
+
 class ShotgunShotUpdater(ShotgunHieroObjectBase, FnShotExporter.ShotTask, CollatingExporter):
     """
     Ensures that Shots and Sequences exist in Shotgun
@@ -36,7 +39,7 @@ class ShotgunShotUpdater(ShotgunHieroObjectBase, FnShotExporter.ShotTask, Collat
         The values correspond to the exported version created on disk.
         """
 
-        (head_in, tail_out) = self.collatedOutputRange(clampToSource=False)
+        (head_in, tail_out) = self.collatedOutputRange(clampToSource=False) # these values are not correct for negative retimed shots, I'm overriding these, see below
 
         handles = self._cutHandles if self._cutHandles is not None else 0
         in_handle = handles
@@ -70,12 +73,28 @@ class ShotgunShotUpdater(ShotgunHieroObjectBase, FnShotExporter.ShotTask, Collat
             cut_in = head_in + in_handle
             cut_out = tail_out - out_handle
         else:
-            cut_in = source_in + self._item.source().sourceIn()
-            cut_out = source_out + self._item.source().sourceIn()
+            # cut_in = source_in + self._item.source().sourceIn()
+            # cut_out = source_out + self._item.source().sourceIn()
+            cut_in = source_in
+            cut_out = source_out
 
             # account for any custom start frame
             cut_in += startFrame
             cut_out += startFrame
+
+        '''
+        Donat : overriding cut info because I get incorrect results for negative retimed shots
+        In the case of a cut lenght export with hanldes and a custom start frame 
+        '''
+        if self._startFrame and self._cutHandles and self.is_cut_length_export():
+            head_in = startFrame
+            cut_in = startFrame + in_handle
+            cut_out = cut_in + self._item.duration() - 1
+            tail_out = cut_out + out_handle
+            self.app.log_debug('Donat : overriding cut info with values : '
+                            'head_in=%s, cut_in=%s, cut_out=%s, tail_out=%s' % (head_in, cut_in, cut_out, tail_out))
+
+
 
         # get the edit in/out points from the timeline
         edit_in = self._item.timelineIn()
@@ -123,6 +142,14 @@ class ShotgunShotUpdater(ShotgunHieroObjectBase, FnShotExporter.ShotTask, Collat
         # Only process actual shots... so uncollated items and hero collated items
         if self.isCollated() and not self.isHero():
             return False
+
+        # Donat : only update the shot info on SG if the item has the 'plate' tag
+        tags_names_list = [ tag.name() for tag in self._item.tags() ]
+        if not UPDATE_TAG_NAME in tags_names_list:
+            self.app.log_debug('Donat : No plate tag on this item, skipping shot update.')
+            return False
+        
+
 
         # execute base class
         FnShotExporter.ShotTask.taskStep(self)
