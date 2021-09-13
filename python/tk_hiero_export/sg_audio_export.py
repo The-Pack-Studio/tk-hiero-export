@@ -36,7 +36,7 @@ class ShotgunAudioExporterUI(ShotgunHieroObjectBase, FnAudioExportUI.AudioExport
     def __init__(self, preset):
         FnAudioExportUI.AudioExportUI.__init__(self, preset)
 
-        self._displayName = "Shotgun Audio Export"
+        self._displayName = "SG Audio Export"
         self._taskType = ShotgunAudioExporter
 
     def populateUI(self, widget, exportTemplate):
@@ -239,7 +239,7 @@ class ShotgunAudioExporter(
             args["task"] = self._sg_task
 
         # register publish
-        self.app.log_debug("Register publish in shotgun: %s" % str(args))
+        self.app.log_debug("Register publish in ShotGrid: %s" % str(args))
         pub_data = sgtk.util.register_publish(**args)
 
         # upload thumbnail for publish

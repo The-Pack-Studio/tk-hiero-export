@@ -61,10 +61,10 @@ class ShotgunShotProcessorUI(
         CollatingExporterUI.__init__(self)
 
     def displayName(self):
-        return "Process as Shotgun Shots"
+        return "Process as SG Shots"
 
     def toolTip(self):
-        return "Process as Shotgun Shots generates output on a per-shot basis and logs it in Shotgun."
+        return "Process as SG Shots generates output on a per-shot basis and logs it in SG."
 
     def populateUI(self, *args, **kwargs):
         """
@@ -84,9 +84,7 @@ class ShotgunShotProcessorUI(
         master_layout.setContentsMargins(0, 0, 0, 0)
 
         # add group box for shotgun stuff
-        shotgun_groupbox = QtGui.QGroupBox(
-            "Shotgun Shot and Sequence Creation Settings"
-        )
+        shotgun_groupbox = QtGui.QGroupBox("SG Shot and Sequence Creation Settings")
         master_layout.addWidget(shotgun_groupbox)
         shotgun_layout = QtGui.QVBoxLayout(shotgun_groupbox)
 
@@ -95,12 +93,12 @@ class ShotgunShotProcessorUI(
         header_text.setWordWrap(True)
         header_text.setText(
             """
-            <big>Welcome to the Shotgun Shot Exporter!</big>
-            <p>When you are using the Shotgun Shot Processor, Shots and
-            Sequences in Shotgun will be created based on the curent timeline.
+            <big>Welcome to the ShotGrid Shot Exporter!</big>
+            <p>When you are using the ShotGrid Shot Processor, Shots and
+            Sequences in ShotGrid will be created based on the curent timeline.
             Existing Shots will be updated with the latest cut lengths.
             Quicktimes for each shot will be reviewable in the Media app when
-            you use the special Shotgun Transcode plugin - all included and
+            you use the special ShotGrid Transcode plugin - all included and
             ready to go in the default preset.
             </p>
             """
@@ -169,7 +167,7 @@ class ShotgunShotProcessorUI(
         :param properties: A dict containing the 'sg_cut_type' preset
         :return: QtGui.QLayout - for the cut type widget
         """
-        tooltip = "What to populate in the `Type` field for this Cut in Shotgun"
+        tooltip = "What to populate in the `Type` field for this Cut in ShotGrid"
 
         # ---- construct the widget
 
@@ -229,7 +227,7 @@ class ShotgunShotProcessorUI(
         statuses = schema["sg_status_list"]["properties"]["valid_values"]["value"]
 
         values = [statuses, templates]
-        labels = ["Shotgun Shot Status", "Shotgun Task Template for Shots"]
+        labels = ["SG Shot Status", "SG Task Template for Shots"]
         keys = ["sg_status_hiero_tags", "task_template_map"]
 
         # build a map of tag value pairs from the properties
@@ -495,7 +493,7 @@ class ShotgunShotProcessor(ShotgunHieroObjectBase, FnShotProcessor.ShotProcessor
         if not self._cutsSupported():
             # cuts not supported. all done here
             self.app.log_info(
-                "No Cut support in this version of Shotgun. Not attempting to "
+                "No Cut support in this version of ShotGrid. Not attempting to "
                 "create Cut or CutItem entries."
             )
             return
@@ -524,15 +522,13 @@ class ShotgunShotProcessor(ShotgunHieroObjectBase, FnShotProcessor.ShotProcessor
         if collateTracks or collateShotNames:
             self.app.log_info(
                 "Cut support is ill defined for collating in Hiero. Not "
-                "attempting to create Cut or CutItem entries in Shotgun."
+                "attempting to create Cut or CutItem entries in ShotGrid."
             )
             return
 
         # ---- at this point, we have the cut related tasks in order.
 
-        self.app.engine.show_busy(
-            "Preprocessing Sequence", "Creating Cut in Shotgun ..."
-        )
+        self.app.engine.show_busy("Preprocessing Sequence", "Creating Cut in SG ...")
 
         # wrap in a try/catch to make sure we can clear the popup at the end
         try:
@@ -808,8 +804,8 @@ class ShotgunShotProcessor(ShotgunHieroObjectBase, FnShotProcessor.ShotProcessor
         # create the cut to get the id.
         sg = self.app.shotgun
         cut = sg.create("Cut", cut_data)
-        self._app.log_debug("Created Cut in Shotgun: %s" % (cut,))
-        self._app.log_info("Created Cut '%s' in Shotgun!" % (cut["code"],))
+        self._app.log_debug("Created Cut in ShotGrid: %s" % (cut,))
+        self._app.log_info("Created Cut '%s' in ShotGrid!" % (cut["code"],))
 
         # make sure the cut item data dicts are updated with the cut info
         for cut_item_data in cut_item_data_list:
@@ -897,7 +893,7 @@ class ShotgunShotProcessorPreset(
 
         resolver.addResolver(
             "{tk_version}",
-            "Version string formatted by Shotgun Toolkit.",
+            "Version string formatted by SG Toolkit.",
             lambda keyword, task: self._formatTkVersionString(task.versionString()),
         )
 
