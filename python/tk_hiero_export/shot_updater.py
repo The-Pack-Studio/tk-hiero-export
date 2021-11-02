@@ -20,8 +20,6 @@ from . import (
     HieroUpdateCuts,
 )
 
-UPDATE_TAG_NAME = "plate" # name of tag that will warrant a shot update (donat)
-
 class ShotgunShotUpdater(
     ShotgunHieroObjectBase, FnShotExporter.ShotTask, CollatingExporter
 ):
@@ -146,10 +144,11 @@ class ShotgunShotUpdater(
         if self.isCollated() and not self.isHero():
             return False
 
-        # Donat : only update the shot info on SG if the item has the 'plate' tag
+        # Donat : only update the shot info on SG if the item has the correct tag defined in the settings of the app
         tags_names_list = [ tag.name() for tag in self._item.tags() ]
-        if not UPDATE_TAG_NAME in tags_names_list:
-            self.app.log_debug('Donat : No plate tag on this item, skipping shot update.')
+        shot_update_tag = self.app.get_setting("shot_update_tag")
+        if not shot_update_tag in tags_names_list:
+            self.app.log_debug("Donat : No '{}' tag on this item, skipping shot update.".format(shot_update_tag))
             return False
         
 

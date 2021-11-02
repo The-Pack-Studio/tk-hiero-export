@@ -71,6 +71,13 @@ configuration:
                      with the Shot."
         default_value: "[['step.Step.code', 'is', 'Comp']]"
 
+    shot_update_tag: #nozon
+        type: str
+        description: Name of the tag that will generate an creation or update of shot information in ShotGrid
+                     Only shots having that tag will trigger an update in ShotGrid's database
+        default_value: shotguntype=plate
+
+
     # hooks
     hook_translate_template:
         type: hook
