@@ -8,6 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+import re
 import hiero.core
 from hiero.exporters import FnShotExporter
 
@@ -265,6 +266,21 @@ class ShotgunShotUpdater(
         sg_shot["sg_cut_duration"] = cut_duration
         sg_shot["sg_working_duration"] = working_duration
 
+        # Donat : add source cut in timecode
+        # sg_shot["sg_source_start_timecode"] = self.get_source_in_timecode(self._item)
+        # sg_shot["sg_source_start_frame"] = cut_in
+
+
+        # Donat add the colorspace of the clip's to the camera colorspace in SG database
+        clip_source_colorspace = self.get_source_colorspace(self._item)
+        # fetch valid values configured on the sg_camera_colorspace
+        valid_shotgun_colorspaces = self.app.shotgun.schema_field_read('Shot', 'sg_camera_colorspace')['sg_camera_colorspace']['properties']['valid_values']['value']
+        if clip_source_colorspace in valid_shotgun_colorspaces:
+            sg_shot["sg_camera_colorspace"] = clip_source_colorspace
+        else:
+            self.app.log_debug("The clip source colorspace: %s is not found on the list of colorspace values in SG : %s" % (clip_source_colorspace, valid_shotgun_colorspaces))
+
+
         # get status from the hiero tags
         status = None
         status_map = dict(self._preset.properties()["sg_status_hiero_tags"])
@@ -377,6 +393,29 @@ class ShotgunShotUpdater(
         This is set by the shot processor.
         """
         return hasattr(self, "_cut_length") and self._cut_length
+
+    def get_source_in_timecode(self, trackItem):
+
+        fps = trackItem.parent().parent().framerate()
+        clip = trackItem.source()
+        clipstartTimeCode = clip.timecodeStart()
+        source_in_timecode = hiero.core.Timecode.timeToString(clipstartTimeCode+trackItem.sourceIn(), fps, hiero.core.Timecode.kDisplayTimecode)
+        
+        return source_in_timecode
+
+
+    def get_source_colorspace(self, trackItem):
+
+        readNode = trackItem.source().readNode()
+        colorspace = readNode["colorspace"].value()
+
+        #deal with 'default' colorspace : need to get rid of the 'default'
+        default_colorspace_match = re.match(r"default \((.+)\)", colorspace)
+        if default_colorspace_match:
+            colorspace = default_colorspace_match.group(1)
+
+        return colorspace
+
 
 
 class ShotgunShotUpdaterPreset(ShotgunHieroObjectBase, hiero.core.TaskPresetBase):
