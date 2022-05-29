@@ -270,6 +270,15 @@ class ShotgunShotUpdater(
         # sg_shot["sg_source_start_timecode"] = self.get_source_in_timecode(self._item)
         # sg_shot["sg_source_start_frame"] = cut_in
 
+        # Donat : add tags
+        sg_tags = []
+        tags_app = self.app.engine.apps.get("tk-hiero-tags")
+        if tags_app:
+            sg_tags = tags_app.get_sg_tags(self._item)
+            sg_shot["sg_project_tags"] = sg_tags
+        else:
+            self.parent.log_info("The 'tk-hiero-tags' app is not running. Will not send tags to SG")
+
 
         # Donat add the colorspace of the clip's to the camera colorspace in SG database
         clip_source_colorspace = self.get_source_colorspace(self._item)
