@@ -266,9 +266,9 @@ class ShotgunShotUpdater(
         sg_shot["sg_cut_duration"] = cut_duration
         sg_shot["sg_working_duration"] = working_duration
 
-        # Donat : add source cut in timecode
-        # sg_shot["sg_source_start_timecode"] = self.get_source_in_timecode(self._item)
-        # sg_shot["sg_source_start_frame"] = cut_in
+        # Donat : add source cut in timecode and frame start
+        sg_shot["sg_source_start_timecode"] = self.get_source_in_timecode(self._item)
+        sg_shot["sg_source_start_frame"] = cut_in
 
         # Donat : add tags
         sg_tags = []
@@ -404,6 +404,11 @@ class ShotgunShotUpdater(
         return hasattr(self, "_cut_length") and self._cut_length
 
     def get_source_in_timecode(self, trackItem):
+        """
+        Gets the clips source timecode for the first visible frame
+        WARNING : This is not correct when a TimeWarp soft effect is applied on the clip
+        (NukeStudio's spreadsheet view is also not correct in that case)
+        """
 
         fps = trackItem.parent().parent().framerate()
         clip = trackItem.source()
