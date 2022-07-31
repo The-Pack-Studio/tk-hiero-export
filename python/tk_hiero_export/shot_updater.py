@@ -10,6 +10,7 @@
 
 import re
 import hiero.core
+import nuke
 from hiero.exporters import FnShotExporter
 
 from .base import ShotgunHieroObjectBase
@@ -421,14 +422,40 @@ class ShotgunShotUpdater(
     def get_source_colorspace(self, trackItem):
 
         readNode = trackItem.source().readNode()
+
+        # Create a dict: Each key/value pair is a role name/colorspace name
+        # If a colorspace has no role, then key and value will be the colorspace name
+        cs_knob = readNode.knob('colorspace')
+        colorspace_list = nuke.getColorspaceList(cs_knob)
+
+        cs_roles_dict = {}
+
+        for colorspace in colorspace_list:
+            role_colorspace_match = re.match(r"(\w+)[^(]+\((.+)\)", colorspace)
+            if role_colorspace_match:
+                rolename = role_colorspace_match.group(1)
+                colorspace_name = role_colorspace_match.group(2)
+            else : rolename = colorspace_name = colorspace
+
+            cs_roles_dict.update({rolename: colorspace_name})
+
+
         colorspace = readNode["colorspace"].value()
+        self.app.log_debug("The clip source colorspace is: %s" % colorspace)
 
-        #deal with 'default' colorspace : need to get rid of the 'default'
-        default_colorspace_match = re.match(r"default \((.+)\)", colorspace)
-        if default_colorspace_match:
-            colorspace = default_colorspace_match.group(1)
+        # First check the special case if it is the 'default (xxx)' from Nuke, NOT from the default role of the OCIO config
+        # in that case the colorspace will be 'default (xxx)', in all other cases it will only be a single string
+        # with no parenthesis. The 'xxx' inside 'default (xxx)' could also be a role name
+        default_match = re.match(r"default \((.+)\)", colorspace)
+        if default_match:
+            colorspace = default_match.group(1)
 
-        return colorspace
+        actual_colorspace = cs_roles_dict[colorspace]
+
+
+        self.app.log_debug("The clip source actual colorspace is: %s" % actual_colorspace)
+
+        return actual_colorspace
 
 
 
