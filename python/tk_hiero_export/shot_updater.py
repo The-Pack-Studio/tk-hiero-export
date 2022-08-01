@@ -270,6 +270,10 @@ class ShotgunShotUpdater(
         # Donat : add source cut in timecode and frame start
         sg_shot["sg_source_start_timecode"] = self.get_source_in_timecode(self._item)
         sg_shot["sg_source_start_frame"] = cut_in
+        rec_in_timecode, rec_out_timecode = self.get_record_timecodes(self._item)
+        sg_shot["sg_record_in_timecode"] = rec_in_timecode
+        sg_shot["sg_record_out_timecode"] = rec_out_timecode
+
 
         # Donat : add tags
         sg_tags = []
@@ -417,6 +421,25 @@ class ShotgunShotUpdater(
         source_in_timecode = hiero.core.Timecode.timeToString(clipstartTimeCode+trackItem.sourceIn(), fps, hiero.core.Timecode.kDisplayTimecode)
         
         return source_in_timecode
+
+
+    def get_record_timecodes(self, trackItem):
+        """
+        Gets the clips record in and record out timecode
+        """
+
+        timeline = trackItem.parentSequence()
+        timeline_fps = timeline.framerate()
+        timeline_frame_start = timeline.timecodeStart()
+
+        clip_timeline_in = trackItem.timelineIn()
+        clip_timeline_out = trackItem.timelineOut()
+
+        rec_in_timecode = hiero.core.Timecode.timeToString((clip_timeline_in + timeline_frame_start), timeline_fps, hiero.core.Timecode.kDisplayTimecode)
+        rec_out_timecode = hiero.core.Timecode.timeToString((clip_timeline_out + timeline_frame_start + 1), timeline_fps, hiero.core.Timecode.kDisplayTimecode)
+
+
+        return (rec_in_timecode, rec_out_timecode)
 
 
     def get_source_colorspace(self, trackItem):
