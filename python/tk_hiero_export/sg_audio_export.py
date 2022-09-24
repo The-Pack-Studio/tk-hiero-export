@@ -25,7 +25,11 @@ from .collating_exporter import CollatingExporter, CollatedShotPreset
 from hiero import core
 from hiero.core import *
 
-from . import HieroGetShot
+from . import (
+    HieroGetShot,
+    HieroGetExtraPublishData,
+)
+
 import nuke
 
 
@@ -140,6 +144,13 @@ class ShotgunAudioExporter(
             # continue without task
             setting = self.app.get_setting("default_task_filter", "[]")
             self.app.log_error("Invalid value for 'default_task_filter': %s" % setting)
+
+        # call the publish data hook to allow for publish customization #Donat
+        self._extra_publish_data = self.app.execute_hook(
+            "hook_get_extra_publish_data",
+            task=self,
+            base_class=HieroGetExtraPublishData,
+        )
 
         # figure out the thumbnail frame
         ##########################
@@ -296,6 +307,15 @@ class ShotgunAudioExporter(
         # register publish
         self.app.log_debug("Register publish in ShotGrid: %s" % str(args))
         pub_data = sgtk.util.register_publish(**args)
+
+        # add extra publish data # Donat
+        if self._extra_publish_data is not None:
+            self.app.log_debug("Adding Extra publish info: %s"
+                % str(self._extra_publish_data)
+            )
+            self.app.shotgun.update(
+                pub_data["type"], pub_data["id"], self._extra_publish_data
+            )
 
         # upload thumbnail for publish
         self._upload_thumbnail_to_sg(pub_data, self._thumbnail)
