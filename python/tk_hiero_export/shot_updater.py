@@ -462,7 +462,11 @@ class ShotgunShotUpdater(
 
             cs_roles_dict.update({rolename: colorspace_name})
 
-
+        # When a read node colorspace knob is set to: 'default (something)',
+        # sometimes, fetching the value of the knob returns 'default' instead of 'default (something)'
+        # After asking the Foundry for help, they told me to use the forceValidate() method on
+        # the read node prior to getting the colorspace knob value. This seems to correct the issue   
+        readNode.forceValidate()
         colorspace = readNode["colorspace"].value()
         self.app.log_debug("The clip source colorspace is: %s" % colorspace)
 
