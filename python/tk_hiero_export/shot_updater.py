@@ -76,10 +76,10 @@ class ShotgunShotUpdater(
             cut_in = head_in + in_handle
             cut_out = tail_out - out_handle
         else:
-            cut_in = source_in + self._item.source().sourceIn()
-            cut_out = source_out + self._item.source().sourceIn()
-            # cut_in = source_in
-            # cut_out = source_out
+            # cut_in = source_in + self._item.source().sourceIn()
+            # cut_out = source_out + self._item.source().sourceIn()
+            cut_in = source_in
+            cut_out = source_out
 
             # account for any custom start frame
             cut_in += startFrame
