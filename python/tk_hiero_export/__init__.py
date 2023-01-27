@@ -63,3 +63,7 @@ from .sg_audio_export import (
     ShotgunAudioExporter,
     ShotgunAudioPreset,
 )
+from .deadline_submission import (
+    DeadlineRenderTask,
+    DeadlineRenderSubmission,
+)

@@ -50,6 +50,7 @@ from tk_hiero_export import (
     ShotgunNukeShotExporterUI,
     ShotgunAudioExporterUI,
     ShotgunHieroObjectBase,
+    DeadlineRenderSubmission,
 )
 
 sys.path.pop()
@@ -181,6 +182,9 @@ class HieroExport(Application):
         hiero.ui.taskUIRegistry.registerProcessorUI(
             ShotgunShotProcessorPreset, ShotgunShotProcessorUI
         )
+
+        hiero.core.taskRegistry.addSubmission( "SG Submit to Deadline", DeadlineRenderSubmission )
+
 
         # Add our default preset
         self._old_AddDefaultPresets_fn = hiero.core.taskRegistry._defaultPresets

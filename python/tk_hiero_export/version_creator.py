@@ -356,6 +356,8 @@ class ShotgunTranscodeExporter(
                 "frame_range": "%s-%s" % (head_in, tail_out),
             }
 
+            print("AAAAAAAAAAAAAAAA self._sg_shot %s" % self._sg_shot)
+
             if self._sg_task is not None:
                 self._version_data["sg_task"] = self._sg_task
 
@@ -509,7 +511,7 @@ class ShotgunTranscodePreset(
         CollatedShotPreset.__init__(self, self.properties())
 
         # set default values
-        self._properties["create_version"] = True
+        self._properties["create_version"] = properties.get("create_version", True)
 
         # Handle custom properties from the customize_export_ui hook.
         custom_properties = (
