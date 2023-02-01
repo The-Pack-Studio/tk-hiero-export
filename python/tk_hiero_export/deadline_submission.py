@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import platform
 import traceback
 import subprocess
 
@@ -41,7 +42,30 @@ from . import (
 
 
 
-IntegrationKVPs = {}
+def DeadlineApiConnection(self):
+
+    deadline_repo = ''
+    if sys.platform == "linux" or sys.platform == "linux2":
+        deadline_repo = self._app.get_setting("dl_server_python_api_lnx")
+    elif sys.platform == "darwin":
+        deadline_repo = self._app.get_setting("dl_server_python_api_mac")
+    elif sys.platform == "win32":
+        deadline_repo = self._app.get_setting("dl_server_python_api_win")
+
+    if not os.path.exists(deadline_repo):
+        self.app.log_error("Deadline repo %s is not found on disk" % deadline_repo)
+        return
+
+    sys.path.append(deadline_repo)
+
+    import Deadline.DeadlineConnect as Connect
+
+    try:
+        Deadline = Connect.DeadlineCon(self._app.get_setting("dl_server_ip"), self._app.get_setting("dl_server_port"))
+        return Deadline
+    except :
+        self.app.log_error("Error, could not connect to Deadline using: Connect.DeadlineCon(%s, %s)" % self._app.get_setting("dl_server_ip"), self._app.get_setting("dl_server_port"))
+        return None
 
 def GetDeadlineCommand():
     deadlineBin = ""
@@ -97,51 +121,111 @@ def CallDeadlineCommand( arguments, hideWindow=True ):
 def strToBool(str):
     return str.lower() in ("yes", "true", "t", "1", "on")
 
-def OpenIntegrationWindow():
-    global IntegrationKVPs
 
-    scriptPath = CallDeadlineCommand( ["-getrepositoryfilepath", "submission/Integration/Main/IntegrationUIStandAlone.py"], False )
-    scriptPath = scriptPath.decode()
-    scriptPath = scriptPath.strip()
-
-    argArray = ["-ExecuteScript", scriptPath, "Hiero", "Draft", "NIM", "0"]
-
-    results = CallDeadlineCommand( argArray, False )
-    keyValuePairs = {}
-
-    outputLines = results.splitlines()
-
-    for line in outputLines:
-        line = line.strip()
-        if not line.startswith("("):
-            tokens = line.split( "=", 1 )
-
-            if len( tokens ) > 1:
-                key = tokens[0]
-                value = tokens [1]
-
-                keyValuePairs[key] = value
-
-    if len( keyValuePairs ) > 0:
-        IntegrationKVPs = keyValuePairs
-
-class DeadlineRenderTask(hiero.core.TaskBase):
+class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
     def __init__(self, jobType, initDict, scriptPath, tempPath, settings):
         hiero.core.TaskBase.__init__(self, initDict)
         # Set the submission settings.
         self.tempPath = tempPath
         self.settings = settings
+        self.initDict = initDict
         
-        # print("XXXXXXXXXX inside DeadlineRenderTask initDict %s" % initDict)
-
         # Set the script path.
         self.scriptPath = scriptPath
         
-        # Figure out the job name from the script file.
+        # Figure out the job name and batch name
         self.jobName = os.path.splitext(os.path.basename(scriptPath))[0]
-        tempJobName = self.settings.value("JobName")
-        if tempJobName != "":
-            self.jobName = tempJobName + " - " + self.jobName
+        self.batchname = self.settings.value("BatchName")
+
+        self.deadlineApiCon = DeadlineApiConnection(self)
+
+        if not self.deadlineApiCon:
+            self.app.log_error("Could not connect to deadline")
+            return
+        
+
+    def startTask(self):
+
+        resolved_export_path = self.resolvedExportPath()
+        # convert slashes to native os style..
+        resolved_export_path = resolved_export_path.replace( "/", os.path.sep )
+
+        sg_current_user = tank.util.get_current_user(self.app.tank)
+        userlogin = sg_current_user['login']
+
+        _sg_shot = self.app.execute_hook(
+            "hook_get_shot",
+            task=self,
+            item=self._item,
+            data=self.app.preprocess_data,
+            fields=["code", "sg_cut_in", "sg_cut_out", "sg_sequence"],
+            base_class=HieroGetShot,
+        )
+
+        ctx = self.app.tank.context_from_entity("Shot", _sg_shot["id"])
+        entity_type = _sg_shot['type']
+        entity_id = _sg_shot['id']
+        shot_name = _sg_shot["code"]
+        sequence_name = _sg_shot["sg_sequence"]["name"]
+
+
+        # Publish information
+        #####################
+        tk_version = int(self._formatTkVersionString(self.versionString()))
+        
+        publish_info = {'name': os.path.basename(resolved_export_path),
+                        'published_file_type': self.app.get_setting("plate_published_file_type"), 
+                        'version_number': tk_version, 
+                        'comment': "Hiero Pull",
+                        }
+
+        # call the publish data hook to allow for publish customization
+        extra_publish_data = self.app.execute_hook(
+            "hook_get_extra_publish_data",
+            task=self,
+            base_class=HieroGetExtraPublishData,
+        )
+        if extra_publish_data is not None:
+            publish_info.update(extra_publish_data)   
+
+        # TODO? Check for conflicting publishes before proceeding 
+        # conflicting_publishes = self._get_conflicting_publishes(ctx, resolved_export_path, publish_info["name"])
+        # print('conflicting_publishes : %s' % conflicting_publishes)
+        # if conflicting_publishes:
+        #     self.app.log_error("Error: SG Transcode job to path: %s conflicts with an existing publish" % resolved_export_path)
+        #     return
+
+        # Store the publish info in json
+        publish_info = json.dumps(publish_info)
+
+        # Get info from fields of export filepath
+        tk = self.app.sgtk
+        tmpl = tk.template_from_path(self.resolvedExportPath())
+        fields = tmpl.get_fields(self.resolvedExportPath())
+        output_type = fields['output']
+        colorspace = fields['colorspace']
+
+        framerate = None
+        if self._sequence:
+            framerate = self._sequence.framerate()
+        if self._clip.framerate().isValid(): # Note that frame rate is taken from clip framerate, not from the sequence frame rate....
+            framerate = self._clip.framerate()
+
+        # if distributed query shotgun for config path
+        pc_path = self.app.sgtk.pipeline_configuration.get_path()
+        
+        if tk.pipeline_configuration.is_auto_path():
+            filters = [['project', 'is', {'type': 'Project', 'id': self.app.context.project['id']}]]
+            shotgun_fields = ["windows_path", "code"]
+            data = tk.shotgun.find('PipelineConfiguration', filters=filters, fields=shotgun_fields)
+            
+            for pc in data:
+                if pc['code'] == "Primary" and pc['windows_path']:
+                    pc_path = os.path.normpath(pc['windows_path'])
+                    break
+
+        project_directory = tk.pipeline_configuration.get_project_disk_name()
+
         
         # Figure out the start and end frames.
         startFrame = 0
@@ -157,112 +241,191 @@ class DeadlineRenderTask(hiero.core.TaskBase):
                 startFrame, endFrame = self.outputRange(ignoreRetimes=True, clampToSource=False)
         if isinstance(self._item, TrackItem):
             # startFrame, endFrame = self.outputRange(ignoreRetimes=True, clampToSource=False) # this is not correct for retimed track items
-            startFrame = initDict['startFrame']
-            endFrame = initDict['endFrame']
+            startFrame = self.initDict['startFrame']
+            endFrame = self.initDict['endFrame']
         
         # Build the frame list from the start and end frames.
-        self.frameList = str(startFrame)
+        frameList = str(startFrame)
         if startFrame != endFrame:
-            self.frameList = self.frameList + "-" + str(endFrame)
+            frameList = frameList + "-" + str(endFrame)
             
         # Figure out the output path.
-        self.outputPath = self.resolvedExportPath()
+        outputPath = self.resolvedExportPath()
         
         # Figure out the chunksize.
-        self.chunkSize = self.settings.value("FramesPerTask")
-        if hiero.core.isVideoFileExtension(os.path.splitext(self.outputPath)[1].lower()):
-            self.chunkSize = endFrame - startFrame + 1
+        chunkSize = self.settings.value("FramesPerTask")
+        if hiero.core.isVideoFileExtension(os.path.splitext(outputPath)[1].lower()):
+            chunkSize = endFrame - startFrame + 1
 
-    def startTask(self):
-        global IntegrationKVPs
 
-        print( "==============================================================" )
-        print( "Preparing job for submission: " + self.jobName )
-        print( "Script path: " + self.scriptPath )
-        print( "Frame list: " + self.frameList )
-        print( "Chunk size: " + str(self.chunkSize) )
-        print( "Output path: " + self.outputPath )
+        self.app.log_info( "==============================================================" )
+        self.app.log_info( "Preparing job for deadline submission: " + self.jobName )
+        self.app.log_info( "Script path: " + self.scriptPath )
+        self.app.log_info( "Frame list: " + frameList )
+        self.app.log_info( "Output path: " + outputPath )
         
-        # Create the job info file.
-        jobInfoFile = self.tempPath + "/hiero_submit_info.job"
-        fileHandle = open( jobInfoFile, "w" )
-        fileHandle.write( "Plugin=Nuke\n" )
-        fileHandle.write( "Name=%s\n" % self.jobName )
-        fileHandle.write( "Comment=%s\n" % self.settings.value("Comment") )
-        fileHandle.write( "Department=%s\n" % self.settings.value("Department") )
-        fileHandle.write( "Pool=%s\n" % self.settings.value("Pool") )
-        fileHandle.write( "SecondaryPool=%s\n" % self.settings.value("SecondaryPool") )
-        fileHandle.write( "Group=%s\n" % self.settings.value("Group") )
-        fileHandle.write( "Priority=%s\n" % self.settings.value("Priority") )
-        fileHandle.write( "MachineLimit=%s\n" % self.settings.value("MachineLimit") )
-        fileHandle.write( "TaskTimeoutMinutes=%s\n" % self.settings.value("TaskTimeout") )
-        fileHandle.write( "EnableAutoTimeout=%s\n" % self.settings.value("AutoTaskTimeout") )
-        fileHandle.write( "ConcurrentTasks=%s\n" % self.settings.value("ConcurrentTasks") )
-        fileHandle.write( "LimitConcurrentTasksToNumberOfCpus=%s\n" % self.settings.value("LimitConcurrentTasks") )
-        fileHandle.write( "LimitGroups=%s\n" % self.settings.value("Limits") )
-        fileHandle.write( "OnJobComplete=%s\n" % self.settings.value("OnJobComplete") )
-        fileHandle.write( "Frames=%s\n" % self.frameList )
-        fileHandle.write( "ChunkSize=%s\n" % self.chunkSize )
-        fileHandle.write( "OutputFilename0=%s\n" % self.outputPath )
-        
+
+        # Construct the job info dict
+        JobInfo = {
+            "Plugin": "Nuke",
+            "Name" : self.jobName,
+            "Comment" : self.settings.value("Comment"),
+            "Department" : self.settings.value("Department"),
+            "Pool" : self.settings.value("Pool"),
+            "SecondaryPool" : self.settings.value("SecondaryPool"),
+            "Group" : self.settings.value("Group"),
+            "Priority" : self.settings.value("Priority"),
+            "MachineLimit" : self.settings.value("MachineLimit"),
+            "TaskTimeoutMinutes" : self.settings.value("TaskTimeout"),
+            "EnableAutoTimeout" : self.settings.value("AutoTaskTimeout"),
+            "ConcurrentTasks" : self.settings.value("ConcurrentTasks"),
+            "LimitConcurrentTasksToNumberOfCpus" : self.settings.value("LimitConcurrentTasks"),
+            "LimitGroups=" : self.settings.value("Limits"),
+            "OnJobComplete" :  self.settings.value("OnJobComplete"),
+            "Frames" : frameList,
+            "ChunkSize" : chunkSize,
+            "OutputFilename0" : outputPath,
+            "MachineName": platform.node(),
+            "UserName": userlogin,
+            "ExtraInfo0": "Compositing",
+            "ExtraInfo1": self.app.context.project['name'],
+            "ExtraInfo2": "%s > %s" % (sequence_name, shot_name),
+            "ExtraInfo3": "%s - %s - %s - v%03d" % (sequence_name, shot_name, output_type, tk_version),
+            "ExtraInfo4": "Pull",
+            "ExtraInfo5": userlogin,
+            "EnvironmentKeyValue0": "NOZ_TK_CONFIG_PATH=%s" % pc_path,
+            "ExtraInfoKeyValue0": "UserName=%s" %  userlogin,
+            "ExtraInfoKeyValue1": "Description=Pull",
+            "ExtraInfoKeyValue2": "ProjectName=%s" % self.app.context.project['name'], 
+            "ExtraInfoKeyValue3": "EntityName=%s > %s" % (sequence_name, shot_name),
+            "ExtraInfoKeyValue4": "TaskName=Compositing",
+            "ExtraInfoKeyValue5": "EntityType=%s" % entity_type,
+            "ExtraInfoKeyValue6": "ProjectId=%i" % self.app.context.project['id'],
+            "ExtraInfoKeyValue7": "EntityId=%i" % entity_id,
+            "ExtraInfoKeyValue8": "TaskId=Notask", # could I have a task ? I should then find a way to create the task
+            "ExtraInfoKeyValue9": "ProjectDirectory=%s" % project_directory,
+            "ExtraInfoKeyValue10": "context=%s" % ctx.serialize(with_user_credentials=False, use_json=True),
+            "ExtraInfoKeyValue11": "PublishInfo=%s" % publish_info,
+            "ExtraInfoKeyValue12": "ProjectScriptFolder=%s" % os.path.join(pc_path, "config", "hooks", "tk-multi-publish2", "nozonpub"),
+            "ExtraInfoKeyValue13": "FrameRate=%s" % str(framerate),
+            "ExtraInfoKeyValue14": "NozCreateSGMovie=True",
+            "ExtraInfoKeyValue15": "UploadSGMovie=true",
+            "ExtraInfoKeyValue16": "NozMovSettingsPreset=compositing",
+            "ExtraInfoKeyValue17": 'Colorspaces={"Colorspace0": "%s"}' % colorspace,
+            # "ExtraInfoKeyValue18": "FrameRangeOverride=%i-%i" % (_sg_shot["sg_cut_in"], _sg_shot["sg_cut_out"]), # TODO add option in UI to exclude or include handles in preview movie
+            }
+
         if strToBool(self.settings.value("SubmitSuspended")):
-            fileHandle.write( "InitialStatus=Suspended\n" )
-            
+            JobInfo["InitialStatus"] = "Suspended"
+
         if strToBool(self.settings.value("IsBlacklist")):
-            fileHandle.write( "Blacklist=%s\n" % self.settings.value("MachineList") )
+            JobInfo["Blacklist"] = self.settings.value("MachineList")
         else:
-            fileHandle.write( "Whitelist=%s\n" % self.settings.value("MachineList") )
-        
-        groupBatch = False
-        if 'integrationSettingsPath' in IntegrationKVPs:
-            with open( IntegrationKVPs['integrationSettingsPath'] ) as file:
-                for line in file.readlines():
-                    fileHandle.write( line )
-            
-            if 'batchMode' in IntegrationKVPs:
-                if IntegrationKVPs['batchMode'] == "True":
-                    groupBatch = True
+            JobInfo["Whitelist"] = self.settings.value("MachineList")
 
-        if groupBatch:
-            fileHandle.write( "BatchName=%s\n" % self.jobName ) 
+        if self.batchname != "":
+            JobInfo["BatchName"] = self.batchname
 
-        fileHandle.close()
-        
-        # Create the plugin info file.
-        pluginInfoFile = self.tempPath +"/hiero_plugin_info.job"
-        fileHandle = open( pluginInfoFile, "w" )
+
+        # Constuct the plugin info dict
+
+
+
+        PluginInfo = {
+            "Version" : self.settings.value("Version"),
+            "Threads" : self.settings.value("Threads"),
+            "RamUse" : self.settings.value("Memory"),
+            "Build" : self.settings.value("Build"),
+            "BatchMode" : self.settings.value("BatchMode"),
+            "NukeX" : self.settings.value("UseNukeX"),
+            "ContinueOnError" : self.settings.value("ContinueOnError"),
+            "UseGpu":False,
+            "VerbosityLevel": 2,
+            }
+
         if not strToBool(self.settings.value("SubmitScript")):
-            fileHandle.write( "SceneFile=%s\n" % self.scriptPath )
-        fileHandle.write( "Version=%s\n" % self.settings.value("Version") )
-        fileHandle.write( "Threads=%s\n" % self.settings.value("Threads") )
-        fileHandle.write( "RamUse=%s\n" % self.settings.value("Memory") )
-        fileHandle.write( "Build=%s\n" % self.settings.value("Build") )
-        fileHandle.write( "BatchMode=%s\n" % self.settings.value("BatchMode") )
-        fileHandle.write( "NukeX=%s\n" % self.settings.value("UseNukeX") )
-        fileHandle.write( "ContinueOnError=%s\n" % self.settings.value("ContinueOnError") )
-        
-        fileHandle.close()
-        
-        # Submit the job to Deadline
-        args = []
-        args.append( jobInfoFile )
-        args.append( pluginInfoFile )
-        if strToBool(self.settings.value("SubmitScript")):
-            args.append( self.scriptPath )
-        
-        results = CallDeadlineCommand( args )
-        print( results )
-        print( "Job submission complete: " + self.jobName  )
+            PluginInfo["SceneFile"] = self.scriptPath
+
+
+        # Submit job to deadline using the deadline API
+        job = self.deadlineApiCon.Jobs.SubmitJob(JobInfo, PluginInfo)
+
+        return job["_id"]
+
+
+    def _get_conflicting_publishes(self, context, path, publish_name, filters=None):
+        """
+        Nozon : code taken from multi-publish2
+
+        Returns a list of SG published file dicts for any existing publishes that
+        match the supplied context, path, and publish_name.
+
+        :param context: The context to search publishes for
+        :param path: The path to match against previous publishes
+        :param publish_name: The name of the publish.
+        :param filters: A list of additional SG find() filters to apply to the
+            publish search.
+
+        :return: A list of ``dict``s representing existing publishes that match
+            the supplied arguments. The paths returned are the standard "id", and
+            "type" as well as the "path" field.
+
+        This method is typically used by publish plugin hooks to determine if there
+        are existing publishes for a given context, publish_name, and path and
+        warning appropriately.
+        """
+
+        # ask core to do a dry_run of a publish with the supplied criteria. this is
+        # a workaround for our inability to filter publishes by path. so for now,
+        # get a dictionary of data that would be used to create a matching publish
+        # and use that to get publishes via a call to find(). Then we'll filter
+        # those by their path field. Once we have the ability in SG to filter by
+        # path, we can replace this whole method with a simple call to find().
+        publish_data = sgtk.util.register_publish(self.app.sgtk, context, path, publish_name, version_number=None, dry_run=True)
+
+        # now build up the filters to match against
+        publish_filters = [filters] if filters else []
+        for field in ["code", "entity", "name", "project", "task"]:
+            publish_filters.append([field, "is", publish_data[field]])
+
+        # run the
+        publishes = self.app.sgtk.shotgun.find("PublishedFile", publish_filters, ["path"])
+
+        # ensure the path is normalized for comparison
+        normalized_path = sgtk.util.ShotgunPath.normalize(path)
+
+        # next, extract the publish path from each of the returned publishes and
+        # compare it against the supplied path. if the paths match, we add the
+        # publish to the list of publishes to return.
+        matching_publishes = []
+        for publish in publishes:
+            publish_path = sgtk.util.resolve_publish_path(self.app.sgtk, publish)
+            if publish_path:
+                # ensure the published path is normalized for comparison
+                normalized_publish_path = sgtk.util.ShotgunPath.normalize(publish_path)
+                if normalized_path == normalized_publish_path:
+                    matching_publishes.append(publish)
+
+        return matching_publishes
+
+
+
+
+
 
 # Create a Submission and add your Task
-class DeadlineRenderSubmission(Submission):
+class ShotgunDeadlineRenderSubmission(ShotgunHieroObjectBase, Submission):
+
+    kNukeRender = "deadline_submission"
+
     def __init__(self):
         Submission.__init__(self)
         self.lastSelection = ""
+        self.jobId = None
 
     def initialise(self):
         self.settingsFile = os.path.join(self.findNukeHomeDir(), "deadline_settings.ini")
-        print( "Loading settings: " + self.settingsFile )
+        self.app.log_debug( "Loading settings: " + self.settingsFile )
         
         # Initialize the submission settings.
         self.settings = QSettings(self.settingsFile, QSettings.IniFormat)
@@ -298,7 +461,8 @@ class DeadlineRenderSubmission(Submission):
 
         # Set up the other default arrays.
         onJobComplete = ("Nothing","Archive","Delete")
-        nukeVersions = ("6.0","6.1","6.2","6.3","6.4","7.0","7.1","7.2","7.3","7.4","8.0","8.1","8.2","8.3","8.4","9.0","9.1","9.2","9.3","9.4","10.0","10.1","10.2","10.3","10.4","11.0","11.1", "11.2", "11.3", "12.1", "12.2", "13.0", "13.1", "13.2")
+        nukeVersions = ("11.0","11.1", "11.2", "11.3", "12.1", "12.2", "13.0", "13.1", "13.2", "14.0")
+        running_nukestudio_version = "%s.%s" % (hiero.core.env["VersionMajor"], hiero.core.env["VersionMinor"])
         buildsToForce = ("None","32bit","64bit")
         
         # Main Window
@@ -323,9 +487,9 @@ class DeadlineRenderSubmission(Submission):
         jobInfoGroupBox.setLayout(jobInfoLayout)
         
         # Job Name
-        jobInfoLayout.addWidget(QLabel("Job Name"), 0, 0)
-        jobNameWidget = QLineEdit(self.settings.value("JobName", ""))
-        jobInfoLayout.addWidget(jobNameWidget, 0, 1)
+        jobInfoLayout.addWidget(QLabel("Batch Name"), 0, 0)
+        batchNameWidget = QLineEdit(self.settings.value("BatchName", ""))
+        jobInfoLayout.addWidget(batchNameWidget, 0, 1)
         
         # Comment
         jobInfoLayout.addWidget(QLabel("Comment"), 1, 0)
@@ -492,7 +656,7 @@ class DeadlineRenderSubmission(Submission):
         for version in nukeVersions:
             versionWidget.addItem(version)
             
-        defaultVersion = self.settings.value("Version", "7.0")
+        defaultVersion = self.settings.value("Version", running_nukestudio_version)
         defaultIndex = versionWidget.findText(defaultVersion)
         if defaultIndex != -1:
             versionWidget.setCurrentIndex(defaultIndex)
@@ -543,7 +707,7 @@ class DeadlineRenderSubmission(Submission):
         
         # Use Batch Mode
         batchModeWidget = QCheckBox("Use Batch Mode")
-        batchModeWidget.setChecked(strToBool(self.settings.value("BatchMode", "False")))
+        batchModeWidget.setChecked(strToBool(self.settings.value("BatchMode", "True")))
         nukeOptionsLayout.addWidget(batchModeWidget, 3, 2)
         
         # Frames Per Task
@@ -555,10 +719,6 @@ class DeadlineRenderSubmission(Submission):
         nukeOptionsLayout.addWidget(QLabel("(this only affects non-movie jobs)"), 4, 2)
         
         tabWidget.addTab(jobTab, "Job Options")
-
-        # Button Box (Extra work required to get the custom ordering we want)
-        integrationButton = QPushButton("Pipeline Tools")
-        integrationButton.clicked.connect( OpenIntegrationWindow )
 
         submitButton = QPushButton("Submit")
         submitButton.clicked.connect( dialog.accept )
@@ -574,9 +734,8 @@ class DeadlineRenderSubmission(Submission):
         buttonGroupBox.setContentsMargins( 180, 0, 0, 0)
         buttonGroupBox.setAlignment( Qt.AlignRight )
         buttonGroupBox.setFlat( True )
-        buttonLayout.addWidget(integrationButton, 0, 1)
-        buttonLayout.addWidget(submitButton, 0, 2)
-        buttonLayout.addWidget(cancelButton, 0, 3)
+        buttonLayout.addWidget(submitButton, 0, 1)
+        buttonLayout.addWidget(cancelButton, 0, 2)
 
         topLayout.addWidget(tabWidget)
         topLayout.addWidget(buttonGroupBox)
@@ -584,7 +743,7 @@ class DeadlineRenderSubmission(Submission):
         # Show the dialog.
         result = (dialog.exec_() == QDialog.DialogCode.Accepted)
         if result:
-            self.settings.setValue("JobName", jobNameWidget.text())
+            self.settings.setValue("BatchName", batchNameWidget.text())
             self.settings.setValue("Comment", commentWidget.text())
             self.settings.setValue("Department", departmentWidget.text())
             self.settings.setValue("Pool", poolWidget.currentText())
@@ -611,10 +770,10 @@ class DeadlineRenderSubmission(Submission):
             self.settings.setValue("BatchMode", str(batchModeWidget.isChecked()))
             self.settings.setValue("Memory", memoryWidget.value())
             
-            print( "Saving settings: " + self.settingsFile )
+            self.app.log_debug( "Saving settings: " + self.settingsFile )
             self.settings.sync()
         else:
-            print( "Submission canceled" )
+            self.app.log_info( "Submission canceled" )
             self.settings = None
             # Not sure if there is a better way to stop the export process. This works, but it leaves all the tasks
             # in the Queued state.
@@ -623,19 +782,12 @@ class DeadlineRenderSubmission(Submission):
     def addJob(self, jobType, initDict, filePath):
         # Only create a task if submission wasn't canceled.
         if self.settings != None:
-            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-            return DeadlineRenderTask( Submission.kCommandLine, initDict, filePath, self.deadlineTemp, self.settings )
+            self.jobId = ShotgunDeadlineRenderTask( Submission.kCommandLine, initDict, filePath, self.deadlineTemp, self.settings )
+            return self.jobId
+
         
     def findNukeHomeDir(self):
         return os.path.normpath(os.path.join(hiero.core.env["HomeDirectory"], ".nuke"))
 
 
 
-
-
-
-
-
-
-#### Add this custom deadline submitter
-# hiero.core.taskRegistry.addSubmission( "ZZZ Submit to Deadline", DeadlineRenderSubmission )

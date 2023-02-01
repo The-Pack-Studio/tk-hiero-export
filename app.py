@@ -22,6 +22,7 @@ import sgtk
 from sgtk.platform.qt import QtCore
 from sgtk.platform import Application
 from sgtk import TankError
+from tank_vendor import six
 
 import hiero.ui
 import hiero.core
@@ -50,7 +51,8 @@ from tk_hiero_export import (
     ShotgunNukeShotExporterUI,
     ShotgunAudioExporterUI,
     ShotgunHieroObjectBase,
-    DeadlineRenderSubmission,
+    ShotgunDeadlineRenderSubmission,
+    ShotgunDeadlineRenderTask,
 )
 
 sys.path.pop()
@@ -183,7 +185,7 @@ class HieroExport(Application):
             ShotgunShotProcessorPreset, ShotgunShotProcessorUI
         )
 
-        hiero.core.taskRegistry.addSubmission( "SG Submit to Deadline", DeadlineRenderSubmission )
+        hiero.core.taskRegistry.addSubmission( "SG Submit to Deadline", ShotgunDeadlineRenderSubmission )
 
 
         # Add our default preset

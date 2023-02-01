@@ -40,9 +40,7 @@ from . import (
 )
 
 
-class ShotgunTranscodeExporterUI(
-    ShotgunHieroObjectBase, FnTranscodeExporterUI.TranscodeExporterUI
-):
+class ShotgunTranscodeExporterUI(ShotgunHieroObjectBase, FnTranscodeExporterUI.TranscodeExporterUI):
     """
     Custom Preferences UI for the shotgun transcoder
 
@@ -79,7 +77,9 @@ class ShotgunTranscodeExporterUI(
             "Create a Version in SG for this transcode.\n\n"
             "If the output format is not a quicktime, then\n"
             "a quicktime will be created.  The quicktime will\n"
-            "be uploaded to SG as Screening Room media."
+            "be uploaded to SG as Screening Room media.\n"
+            "This option will be ignored if the export is\n"
+            "submitted to Deadline"
         )
 
         create_version_checkbox.setCheckState(QtCore.Qt.Checked)
@@ -118,9 +118,7 @@ class ShotgunTranscodeExporterUI(
             layout.addWidget(custom_widget)
 
 
-class ShotgunTranscodeExporter(
-    ShotgunHieroObjectBase, FnTranscodeExporter.TranscodeExporter, CollatingExporter
-):
+class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.TranscodeExporter, CollatingExporter):
     """
     Create Transcode object and send to Shotgun
     """
@@ -331,6 +329,12 @@ class ShotgunTranscodeExporter(
             setting = self.app.get_setting("default_task_filter", "[]")
             self.app.log_error("Invalid value for 'default_task_filter': %s" % setting)
 
+
+        if self._submission.kNukeRender == "deadline_submission":
+            self.app.log_debug('This will use Deadline, disable any mp4 version creation')
+            self._preset.properties()["create_version"] = False
+
+
         if self._preset.properties()["create_version"]:
             # lookup current login
             sg_current_user = tank.util.get_current_user(self.app.tank)
@@ -355,8 +359,6 @@ class ShotgunTranscodeExporter(
                 "sg_last_frame": tail_out,
                 "frame_range": "%s-%s" % (head_in, tail_out),
             }
-
-            print("AAAAAAAAAAAAAAAA self._sg_shot %s" % self._sg_shot)
 
             if self._sg_task is not None:
                 self._version_data["sg_task"] = self._sg_task
@@ -395,6 +397,17 @@ class ShotgunTranscodeExporter(
         """ Finish Task """
         # run base class implementation
         FnTranscodeExporter.TranscodeExporter.finishTask(self)
+
+        if self._submission.kNukeRender == "deadline_submission":
+            self.app.log_debug('This Shotgun Transcode task has been sent to deadline, skipping publish and version')
+            # Log usage metrics
+            try:
+                self.app.log_metric("Transcode & Publish", log_version=True)
+            except:
+                # ingore any errors. ex: metrics logging not supported
+                pass
+            return
+
 
         # create publish
         ################
@@ -500,9 +513,7 @@ class ShotgunTranscodeExporter(
             pass
 
 
-class ShotgunTranscodePreset(
-    ShotgunHieroObjectBase, FnTranscodeExporter.TranscodePreset, CollatedShotPreset
-):
+class ShotgunTranscodePreset(ShotgunHieroObjectBase, FnTranscodeExporter.TranscodePreset, CollatedShotPreset):
     """ Settings for the SG transcode step """
 
     def __init__(self, name, properties):
