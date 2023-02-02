@@ -146,15 +146,7 @@ class ShotgunShotUpdater(
         if self.isCollated() and not self.isHero():
             return False
 
-        # Donat : only update the shot info on SG if the item has the correct tag defined in the settings of the app
-        tags_names_list = [ tag.name() for tag in self._item.tags() ]
-        shot_update_tag = self.app.get_setting("shot_update_tag")
-        if not shot_update_tag in tags_names_list:
-            self.app.log_debug("Donat : No '{}' tag on this item, skipping shot update.".format(shot_update_tag))
-            return False
         
-
-
         # execute base class
         FnShotExporter.ShotTask.taskStep(self)
 
@@ -175,6 +167,27 @@ class ShotgunShotUpdater(
         del sg_shot["id"]
         shot_type = sg_shot["type"]
         del sg_shot["type"]
+
+
+        # Donat : only update the shot info on SG if the item has the correct tag defined in the settings of the app
+        tags_names_list = [ tag.name() for tag in self._item.tags() ]
+        shot_update_tag = self.app.get_setting("shot_update_tag")
+        if not shot_update_tag in tags_names_list:
+
+            # create the directory structure
+            self.app.execute_hook_method(
+                "hook_update_shot",
+                "create_filesystem_structure",
+                entity_type=shot_type,
+                entity_id=shot_id,
+                preset_properties=self._preset.properties(),
+                base_class=HieroUpdateShot,
+            )
+            self.app.log_debug("Donat : No '{}' tag on this item, skipping shot update.".format(shot_update_tag))
+            return False
+
+
+
 
         # The cut order may have been set by the processor. Otherwise keep old behavior.
         cut_order = self.app.shot_count + 1
