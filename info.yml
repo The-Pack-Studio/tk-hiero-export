@@ -105,6 +105,12 @@ configuration:
         default_value: 8082
         description: Port of the deadline server
 
+    noz_movie_settings_preset:
+        type: str
+        default_value: "platepull"
+        description: "Name of the preset found in NozCreatePreviewMovieConfig.yaml
+                      that will be used for the encoding of the preview video
+                      created when pulling plates"
 
     # hooks
     hook_translate_template:

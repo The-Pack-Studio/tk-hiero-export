@@ -310,7 +310,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "ExtraInfoKeyValue13": "FrameRate=%s" % str(framerate),
             "ExtraInfoKeyValue14": "NozCreateSGMovie=True",
             "ExtraInfoKeyValue15": "UploadSGMovie=true",
-            "ExtraInfoKeyValue16": "NozMovSettingsPreset=compositing",
+            "ExtraInfoKeyValue16": "NozMovSettingsPreset=%s" % self.app.get_setting("noz_movie_settings_preset"),
             "ExtraInfoKeyValue17": 'Colorspaces={"Colorspace0": "%s"}' % colorspace,
             # "ExtraInfoKeyValue18": "FrameRangeOverride=%i-%i" % (_sg_shot["sg_cut_in"], _sg_shot["sg_cut_out"]), # TODO add option in UI to exclude or include handles in preview movie
             }
