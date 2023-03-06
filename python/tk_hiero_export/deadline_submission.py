@@ -201,6 +201,10 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         # Get info from fields of export filepath
         tk = self.app.sgtk
         tmpl = tk.template_from_path(self.resolvedExportPath())
+        if not tmpl:
+            self.app.log_info("ERROR: The path: %s cannot be translated to a ShotGrid template. Please check that the export preset path is correct." % self.resolvedExportPath()) 
+            return
+
         fields = tmpl.get_fields(self.resolvedExportPath())
         output_type = fields['output']
         colorspace = fields['colorspace']

@@ -289,6 +289,15 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
                 "/", os.path.sep
             )
 
+        tk = self.app.sgtk
+        tmpl = tk.template_from_path(self.resolvedExportPath())
+        if not tmpl:
+            self.app.log_debug("The path:%s cannot be translated to a ShotGrid template. Please check that the export preset path is correct." % self.resolvedExportPath())
+            dialog = QtGui.QMessageBox.warning( hiero.ui.mainWindow(),
+                "ShotGrid error",
+                "The path:\n\n%s\n\ncannot be translated to a ShotGrid template.\nPlease check that the export preset path is correct." % self.resolvedExportPath())
+            return
+
         # call the get_shot hook
         ########################
         if self.app.shot_count == 0:
