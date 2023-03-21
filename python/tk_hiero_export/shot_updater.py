@@ -22,6 +22,9 @@ from . import (
     HieroUpdateCuts,
 )
 
+SHOTGRADE = "ShotGrade"
+
+
 class ShotgunShotUpdater(
     ShotgunHieroObjectBase, FnShotExporter.ShotTask, CollatingExporter
 ):
@@ -295,7 +298,21 @@ class ShotgunShotUpdater(
             sg_tags = tags_app.get_sg_tags(self._item)
             sg_shot["sg_project_tags"] = sg_tags
         else:
-            self.parent.log_info("The 'tk-hiero-tags' app is not running. Will not send tags to SG")
+            self.app.log_debug("The 'tk-hiero-tags' app is not running. Will not send tags to SG")
+
+        # Shotlook app
+        shotlook_app = self.app.engine.apps.get("tk-nukestudio-shotlook")
+        if shotlook_app:
+            #check if the track item has a shotlook effect applied
+            shotlook_effect = shotlook_app.get_shotlook_effect(self._item)
+            if shotlook_effect:
+                self.app.log_debug("Found a Shotlook effect: %s. Adding lut info to the shot" % shotlook_effect.name())
+                sg_shot["sg_shot_lut"] = shotlook_app.get_lut_name(self._item)
+                sg_shot["sg_review_colorspace"] = SHOTGRADE
+                # create/export the CDL file
+                export_cdl = shotlook_app.export_cdl(self._item)
+                if export_cdl:
+                    self.app.log_debug("Exported CDL file on disk")
 
 
         # Donat add the colorspace of the clip's to the camera colorspace in SG database
