@@ -112,6 +112,31 @@ configuration:
                       that will be used for the encoding of the preview video
                       created when pulling plates"
 
+    # settings related to plate to first comp
+    first_comp_output_plate_filter:
+        type: str
+        default_value: "plate"
+        description: "Name of the type of plate, from the 'shotguntype' tags
+                     that will be accepted as candidate for the execution
+                     of the Plate to First Comp Output"
+
+    first_comp_output_template_filter:
+        type: list
+        description: "List of templates. Outputs using one of these templates will be
+                     considered for the execution of the Plate to First Comp Output"
+        allows_empty: False
+        values:
+            type: template
+            required_fields: []
+            optional_fields: "*"
+
+    first_comp_output_colorspace:
+        type: str
+        default_value: "camera"
+        description: "Colorspace that will be used for the Plate to first comp output
+                     This can be either a colorspace name, or 'camera'. If it's 
+                     'camera', then the input colorspace of the track item is used" 
+
     # hooks
     hook_translate_template:
         type: hook
@@ -268,6 +293,11 @@ configuration:
                       token as a version string for tk."
         required_fields: [version]
         optional_fields: "*"
+
+
+frameworks:
+    - {"name": "tk-framework-nozon", "version": "v0.x.x"}
+
 
 # the engines that this app can operate in:
 supported_engines: [tk-hiero, tk-nuke]

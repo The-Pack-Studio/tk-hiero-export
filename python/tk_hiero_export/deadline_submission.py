@@ -41,7 +41,6 @@ from . import (
 
 
 
-
 def DeadlineApiConnection(self):
 
     deadline_repo = ''
@@ -143,6 +142,8 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             self.app.log_error("Could not connect to deadline")
             return
         
+        fw = self._app.frameworks['tk-framework-nozon']
+        self.csp = fw.import_module("colorspace")
 
     def startTask(self):
 
@@ -262,6 +263,27 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             chunkSize = endFrame - startFrame + 1
 
 
+        # Opt-in to the CreateFirstCompOutputEvent only if it has been selected in the submission settings
+        # and if the plate type and template are right. Add copyFirstCompToLatest if necessary
+        job_opt_ins = ""
+        copyFirstCompToLatest = "false"
+
+        if strToBool(self.settings.value("CreateFirstCompOutput")):
+            if output_type == self.app.get_setting("first_comp_output_plate_filter"):
+                if tmpl.name in self.app.get_setting("first_comp_output_template_filter"):
+                    job_opt_ins = "PlateToFirstCompOutputEvent"
+                    # add the copytolatest if it was selected
+                    if strToBool(self.settings.value("CopyLatest")):
+                        copyFirstCompToLatest = "true"
+
+        # Calculate output colorspace for the firstCompOutput
+        first_comp_colorspace = ""
+        first_comp_colorspace = self.app.get_setting("first_comp_output_colorspace")
+
+        if first_comp_colorspace.lower() == 'camera':
+            if isinstance(self._item, TrackItem):
+                first_comp_colorspace = self.csp.ColorSpace().get_source_colorspace_name(self._item)
+
         self.app.log_info( "==============================================================" )
         self.app.log_info( "Preparing job for deadline submission: " + self.jobName )
         self.app.log_info( "Script path: " + self.scriptPath )
@@ -273,6 +295,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         JobInfo = {
             "Plugin": "Nuke",
             "Name" : self.jobName,
+            "BatchName" : "NukeStudio - %s - %s" % (self.app.context.project['name'], self.batchname),
             "Comment" : self.settings.value("Comment"),
             "Department" : self.settings.value("Department"),
             "Pool" : self.settings.value("Pool"),
@@ -286,6 +309,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "LimitConcurrentTasksToNumberOfCpus" : self.settings.value("LimitConcurrentTasks"),
             "LimitGroups=" : self.settings.value("Limits"),
             "OnJobComplete" :  self.settings.value("OnJobComplete"),
+            "EventOptIns": job_opt_ins,
             "Frames" : frameList,
             "ChunkSize" : chunkSize,
             "OutputFilename0" : outputPath,
@@ -316,7 +340,9 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "ExtraInfoKeyValue15": "UploadSGMovie=true",
             "ExtraInfoKeyValue16": "NozMovSettingsPreset=%s" % self.app.get_setting("noz_movie_settings_preset"),
             "ExtraInfoKeyValue17": 'Colorspaces={"Colorspace0": "%s"}' % colorspace,
-            # "ExtraInfoKeyValue18": "FrameRangeOverride=%i-%i" % (_sg_shot["sg_cut_in"], _sg_shot["sg_cut_out"]), # TODO add option in UI to exclude or include handles in preview movie
+            "ExtraInfoKeyValue18": 'copyFirstCompToLatest=%s' % copyFirstCompToLatest,
+            "ExtraInfoKeyValue19": 'FirstCompOutputColorspace=%s' % first_comp_colorspace,
+            # "ExtraInfoKeyValue99": "FrameRangeOverride=%i-%i" % (_sg_shot["sg_cut_in"], _sg_shot["sg_cut_out"]), # TODO add option in UI to exclude or include handles in preview movie
             }
 
         if strToBool(self.settings.value("SubmitSuspended")):
@@ -327,14 +353,8 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         else:
             JobInfo["Whitelist"] = self.settings.value("MachineList")
 
-        if self.batchname != "":
-            JobInfo["BatchName"] = self.batchname
-
 
         # Constuct the plugin info dict
-
-
-
         PluginInfo = {
             "Version" : self.settings.value("Version"),
             "Threads" : self.settings.value("Threads"),
@@ -647,7 +667,19 @@ class ShotgunDeadlineRenderSubmission(ShotgunHieroObjectBase, Submission):
         submitSuspendedWidget.setChecked(strToBool(self.settings.value("SubmitSuspended", "False")))
         jobOptionsLayout.addWidget(submitSuspendedWidget, 9, 2)
         
-        
+
+        # Create First Comp output Nozon
+        CreateFirstCompOutputWidget = QCheckBox("Create first comp output version")
+        CreateFirstCompOutputWidget.setChecked(strToBool(self.settings.value("CreateFirstCompOutput", "True")))
+        jobOptionsLayout.addWidget(CreateFirstCompOutputWidget, 10, 0)
+
+
+        # Copy to latest of first comp output
+        CopyLatestWidget = QCheckBox("Copy to latest of first comp output")
+        CopyLatestWidget.setChecked(strToBool(self.settings.value("CopyLatest", "True")))
+        jobOptionsLayout.addWidget(CopyLatestWidget, 10, 1)
+
+
         # Nuke Options
         nukeOptionsGroupBox = QGroupBox("Nuke Options")
         jobTabLayout.addWidget(nukeOptionsGroupBox)
@@ -764,6 +796,8 @@ class ShotgunDeadlineRenderSubmission(ShotgunHieroObjectBase, Submission):
             self.settings.setValue("Limits", limitsWidget.text())
             self.settings.setValue("OnJobComplete", onJobCompleteWidget.currentText())
             self.settings.setValue("SubmitSuspended", str(submitSuspendedWidget.isChecked()))
+            self.settings.setValue("CreateFirstCompOutput", str(CreateFirstCompOutputWidget.isChecked()))
+            self.settings.setValue("CopyLatest", str(CopyLatestWidget.isChecked()))
             self.settings.setValue("Version", versionWidget.currentText())
             self.settings.setValue("SubmitScript", str(submitScriptWidget.isChecked()))
             self.settings.setValue("Build", buildWidget.currentText())

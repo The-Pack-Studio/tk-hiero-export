@@ -24,7 +24,6 @@ from . import (
 
 SHOTGRADE = "ShotGrade"
 
-
 class ShotgunShotUpdater(
     ShotgunHieroObjectBase, FnShotExporter.ShotTask, CollatingExporter
 ):
@@ -37,6 +36,9 @@ class ShotgunShotUpdater(
         FnShotExporter.ShotTask.__init__(self, initDict)
         CollatingExporter.__init__(self)
         self._cut_order = None
+
+        fw = self.app.frameworks['tk-framework-nozon']
+        self.csp = fw.import_module("colorspace")
 
     def get_cut_item_data(self):
         """
@@ -316,7 +318,7 @@ class ShotgunShotUpdater(
 
 
         # Donat add the colorspace of the clip's to the camera colorspace in SG database
-        clip_source_colorspace = self.get_source_colorspace(self._item)
+        clip_source_colorspace = self.csp.ColorSpace().get_source_colorspace_name(self._item)
         # fetch valid values configured on the sg_camera_colorspace
         valid_shotgun_colorspaces = self.app.shotgun.schema_field_read('Shot', 'sg_camera_colorspace')['sg_camera_colorspace']['properties']['valid_values']['value']
         if clip_source_colorspace in valid_shotgun_colorspaces:
@@ -470,49 +472,6 @@ class ShotgunShotUpdater(
 
 
         return (rec_in_timecode, rec_out_timecode)
-
-
-    def get_source_colorspace(self, trackItem):
-
-        readNode = trackItem.source().readNode()
-
-        # Create a dict: Each key/value pair is a role name/colorspace name
-        # If a colorspace has no role, then key and value will be the colorspace name
-        cs_knob = readNode.knob('colorspace')
-        colorspace_list = nuke.getColorspaceList(cs_knob)
-
-        cs_roles_dict = {}
-
-        for colorspace in colorspace_list:
-            role_colorspace_match = re.match(r"(\w+)[^(]+\((.+)\)", colorspace)
-            if role_colorspace_match:
-                rolename = role_colorspace_match.group(1)
-                colorspace_name = role_colorspace_match.group(2)
-            else : rolename = colorspace_name = colorspace
-
-            cs_roles_dict.update({rolename: colorspace_name})
-
-        # When a read node colorspace knob is set to: 'default (something)',
-        # sometimes, fetching the value of the knob returns 'default' instead of 'default (something)'
-        # After asking the Foundry for help, they told me to use the forceValidate() method on
-        # the read node prior to getting the colorspace knob value. This seems to correct the issue   
-        readNode.forceValidate()
-        colorspace = readNode["colorspace"].value()
-        self.app.log_debug("The clip source colorspace is: %s" % colorspace)
-
-        # First check the special case if it is the 'default (xxx)' from Nuke, NOT from the default role of the OCIO config
-        # in that case the colorspace will be 'default (xxx)', in all other cases it will only be a single string
-        # with no parenthesis. The 'xxx' inside 'default (xxx)' could also be a role name
-        default_match = re.match(r"default \((.+)\)", colorspace)
-        if default_match:
-            colorspace = default_match.group(1)
-
-        actual_colorspace = cs_roles_dict[colorspace]
-
-
-        self.app.log_debug("The clip source actual colorspace is: %s" % actual_colorspace)
-
-        return actual_colorspace
 
 
 
