@@ -273,15 +273,16 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             chunkSize = endFrame - startFrame + 1
 
 
+        job_opt_ins = []
+        job_opt_ins.append("NozMov2EventPlugin")
         # Opt-in to the CreateFirstCompOutputEvent only if it has been selected in the submission settings
         # and if the plate type and template are right. Add copyFirstCompToLatest if necessary
-        job_opt_ins = ""
         copyFirstCompToLatest = "false"
 
         if strToBool(self.settings.value("CreateFirstCompOutput")):
             if output_type == self.app.get_setting("first_comp_output_plate_filter"):
                 if tmpl.name in self.app.get_setting("first_comp_output_template_filter"):
-                    job_opt_ins = "PlateToFirstCompOutputEvent"
+                    job_opt_ins.append("PlateToFirstCompOutputEvent")
                     # add the copytolatest if it was selected
                     if strToBool(self.settings.value("CopyLatest")):
                         copyFirstCompToLatest = "true"
@@ -293,6 +294,24 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         if first_comp_colorspace.lower() == 'camera':
             if isinstance(self._item, TrackItem):
                 first_comp_colorspace = self.csp.ColorSpace().get_source_colorspace_name(self._item)
+
+
+        #NovMov app
+        nozmov_app = self.app.engine.apps.get("tk-multi-nozmov")
+        if not nozmov_app:
+            self.app.log_error("Error : tk-multi-nozmov app not found or could not initialise")
+            raise Exception
+
+        # need to calc the output path of the nozmov movie
+        nozmov_preset_name = self.app.get_setting("noz_movie_settings_preset")
+        nozmov_path = nozmov_app.calc_output_filepath(outputPath, nozmov_preset_name)
+
+        # create preset settings - could be more than one
+        nozmov = [{"preset_name":nozmov_preset_name, "path": nozmov_path,
+                    "first_frame": startFrame, "last_frame": endFrame, "upload": True, "add_audio": False}]
+        nozmovs = {"NozMov0": nozmov}
+        nozmovs = json.dumps(nozmovs)
+
 
         self.app.log_info( "==============================================================" )
         self.app.log_info( "Preparing job for deadline submission: " + self.jobName )
@@ -319,7 +338,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "LimitConcurrentTasksToNumberOfCpus" : self.settings.value("LimitConcurrentTasks"),
             "LimitGroups=" : self.settings.value("Limits"),
             "OnJobComplete" :  self.settings.value("OnJobComplete"),
-            "EventOptIns": job_opt_ins,
+            "EventOptIns": ",".join(job_opt_ins),
             "Frames" : frameList,
             "ChunkSize" : chunkSize,
             "OutputFilename0" : outputPath,
@@ -346,13 +365,12 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "ExtraInfoKeyValue11": "PublishInfo=%s" % publish_info,
             "ExtraInfoKeyValue12": "ProjectScriptFolder=%s" % os.path.join(pc_path, "config", "hooks", "tk-multi-publish2", "nozonpub"),
             "ExtraInfoKeyValue13": "FrameRate=%s" % str(framerate),
-            "ExtraInfoKeyValue14": "NozCreateSGMovie=True",
-            "ExtraInfoKeyValue15": "UploadSGMovie=true",
-            "ExtraInfoKeyValue16": "NozMovSettingsPreset=%s" % self.app.get_setting("noz_movie_settings_preset"),
-            "ExtraInfoKeyValue17": 'Colorspaces={"Colorspace0": "%s"}' % colorspace,
-            "ExtraInfoKeyValue18": 'copyFirstCompToLatest=%s' % copyFirstCompToLatest,
-            "ExtraInfoKeyValue19": 'FirstCompOutputColorspace=%s' % first_comp_colorspace,
-            # "ExtraInfoKeyValue99": "FrameRangeOverride=%i-%i" % (_sg_shot["sg_cut_in"], _sg_shot["sg_cut_out"]), # TODO add option in UI to exclude or include handles in preview movie
+            "ExtraInfoKeyValue14": 'Colorspaces={"Colorspace0": "%s"}' % colorspace,
+            "ExtraInfoKeyValue15": 'copyFirstCompToLatest=%s' % copyFirstCompToLatest,
+            "ExtraInfoKeyValue16": 'FirstCompOutputColorspace=%s' % first_comp_colorspace,
+            "ExtraInfoKeyValue17": "NozMovDeadlineEventScript=%s" % nozmov_app.get_setting("deadline_event_script"),
+            "ExtraInfoKeyValue18": "NozMovDeadlinePluginScript=%s" % nozmov_app.get_setting("deadline_plugin_script"),
+            "ExtraInfoKeyValue19": "NozMovs=%s" % nozmovs,
             }
 
         if strToBool(self.settings.value("SubmitSuspended")):
