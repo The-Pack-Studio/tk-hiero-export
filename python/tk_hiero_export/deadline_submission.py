@@ -39,43 +39,6 @@ from . import (
     HieroPostVersionCreation,
 )
 
-
-
-def DeadlineApiConnection(self):
-
-    if sys.platform == "win32":
-        deadline_api_path = self._app.get_setting("dl_python_api_win")
-        deadline_certificates_path = self._app.get_setting("dl_webservice_certificates_win")
-    elif sys.platform == "linux" or sys.platform == "linux2":
-        deadline_api_path = self._app.get_setting("dl_python_api_lnx")
-        deadline_certificates_path = self._app.get_setting("dl_webservice_certificates_lnx")
-    elif sys.platform == "darwin":
-        deadline_api_path = self._app.get_setting("dl_python_api_mac")
-        deadline_certificates_path = self._app.get_setting("dl_webservice_certificates_mac")
-
-    if not os.path.exists(deadline_api_path):
-        raise Exception("ERROR : The standalone python api was not found in path: %s" % deadline_api_path)
-
-    sys.path.append(deadline_api_path)
-
-    # Try to import the deadline connection module
-    try:
-        import Deadline.DeadlineConnect as Connect
-    except:
-        raise Exception("ERROR : Could not import deadline 'Deadline.DeadlineConnect' from %s" % deadline_api_path)
-
-    if self._app.get_setting("dl_webservice_use_tls") == True:
-        deadline_connection = Connect.DeadlineCon(self._app.get_setting("dl_webservice_ip"), self._app.get_setting("dl_webservice_tls_port"), True, deadline_certificates_path, False)
-    else:
-        deadline_connection = Connect.DeadlineCon(self._app.get_setting("dl_webservice_ip"), self._app.get_setting("dl_webservice_http_port"))
-
-    # Check if the deadline_connection actually works
-    # this will raise an error if it doesn't work. I have found no cleaner way to check for this
-    check = deadline_connection.Groups.GetGroupNames()
-
-    return deadline_connection        
-
-
 def GetDeadlineCommand():
     deadlineBin = ""
     try:
@@ -146,7 +109,8 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         self.jobName = os.path.splitext(os.path.basename(scriptPath))[0]
         self.batchname = self.settings.value("BatchName")
 
-        self.deadlineApiCon = DeadlineApiConnection(self)
+        fwdead = self._app.frameworks['tk-framework-deadline']
+        self.deadlineApiCon = fwdead.deadline_connection() 
 
         if not self.deadlineApiCon:
             self.app.log_error("ERROR: Could not connect to deadline")
