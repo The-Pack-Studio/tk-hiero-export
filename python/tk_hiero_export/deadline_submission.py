@@ -230,6 +230,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             
         # Figure out the output path.
         outputPath = self.resolvedExportPath()
+        outputPath = os.path.normpath(outputPath)
         
         # Figure out the chunksize.
         chunkSize = self.settings.value("FramesPerTask")
@@ -305,7 +306,8 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "EventOptIns": ",".join(job_opt_ins),
             "Frames" : frameList,
             "ChunkSize" : chunkSize,
-            "OutputFilename0" : outputPath,
+            "OutputFilename0" : os.path.basename(outputPath),
+            "OutputDirectory0" : os.path.dirname(outputPath),
             "MachineName": platform.node(),
             "UserName": userlogin,
             "ExtraInfo0": "Compositing",
