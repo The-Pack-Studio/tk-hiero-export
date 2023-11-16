@@ -318,7 +318,8 @@ class ShotgunShotUpdater(
 
 
         # Donat add the colorspace of the clip's to the camera colorspace in SG database
-        clip_source_colorspace = self.csp.ColorSpace().get_source_colorspace_name(self._item)
+        read_node = self._item.source().readNode()
+        clip_source_colorspace = self.csp.ColorSpace().get_read_colorspace_name(read_node)
         # fetch valid values configured on the sg_camera_colorspace
         valid_shotgun_colorspaces = self.app.shotgun.schema_field_read('Shot', 'sg_camera_colorspace')['sg_camera_colorspace']['properties']['valid_values']['value']
         if clip_source_colorspace in valid_shotgun_colorspaces:

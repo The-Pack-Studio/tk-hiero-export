@@ -258,7 +258,8 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
 
         if first_comp_colorspace.lower() == 'camera':
             if isinstance(self._item, TrackItem):
-                first_comp_colorspace = self.csp.ColorSpace().get_source_colorspace_name(self._item)
+                read_node = self._item.source().readNode()
+                first_comp_colorspace = self.csp.ColorSpace().get_read_colorspace_name(read_node)
 
 
         #NovMov app
@@ -479,7 +480,7 @@ class ShotgunDeadlineRenderSubmission(ShotgunHieroObjectBase, Submission):
 
         # Set up the other default arrays.
         onJobComplete = ("Nothing","Archive","Delete")
-        nukeVersions = ("11.0","11.1", "11.2", "11.3", "12.1", "12.2", "13.0", "13.1", "13.2", "14.0")
+        nukeVersions = ("11.0","11.1", "11.2", "11.3", "12.1", "12.2", "13.0", "13.1", "13.2", "14.0", "14.1", "15.0")
         running_nukestudio_version = "%s.%s" % (hiero.core.env["VersionMajor"], hiero.core.env["VersionMinor"])
         buildsToForce = ("None","32bit","64bit")
         
