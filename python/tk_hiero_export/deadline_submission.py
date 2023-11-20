@@ -1,5 +1,6 @@
 import os
 import sys
+import ast
 import re
 import platform
 import traceback
@@ -26,6 +27,7 @@ from hiero.ui import *
 import json
 
 import tank
+import sgtk
 import sgtk.util
 
 from .base import ShotgunHieroObjectBase
@@ -109,14 +111,14 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         self.jobName = os.path.splitext(os.path.basename(scriptPath))[0]
         self.batchname = self.settings.value("BatchName")
 
-        fwdead = self._app.frameworks['tk-framework-deadline']
+        fwdead = self.app.frameworks['tk-framework-deadline']
         self.deadlineApiCon = fwdead.deadline_connection() 
 
         if not self.deadlineApiCon:
             self.app.log_error("ERROR: Could not connect to deadline")
             return
         
-        fw = self._app.frameworks['tk-framework-nozon']
+        fw = self.app.frameworks['tk-framework-nozon']
         self.csp = fw.import_module("colorspace")
 
     def startTask(self):
@@ -172,6 +174,32 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
 
         # Store the publish info in json
         publish_info = json.dumps(publish_info)
+
+
+        # Task information
+        sg_task = None
+        try:
+            task_filter = self.app.get_setting("default_task_filter", "[]")
+            task_filter = ast.literal_eval(task_filter)
+            task_filter.append(["entity", "is", _sg_shot])
+            task_fields = ["step", "content", "name"]
+            tasks = self.app.shotgun.find("Task", filters=task_filter, fields=task_fields)
+            if len(tasks) == 1:
+                sg_task = tasks[0]
+        except ValueError:
+            # continue without task
+            self.app.log_error("Invalid value for 'default_task_filter': %s. No task found." % setting)
+
+        task_id = "NoTask"
+        step_name = "Editorial"
+        if sg_task:
+            ctx_dict = ctx.to_dict()
+            ctx_dict["step"] = sg_task['step']
+            ctx_dict["task"] = sg_task
+            ctx = sgtk.Context.from_dict(self.app.sgtk, ctx_dict)
+            task_id = sg_task.get("id")
+            step_name = sg_task['step']['name']
+
 
         # Get info from fields of export filepath
         tk = self.app.sgtk
@@ -311,7 +339,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "OutputDirectory0" : os.path.dirname(outputPath),
             "MachineName": platform.node(),
             "UserName": userlogin,
-            "ExtraInfo0": "Compositing",
+            "ExtraInfo0": step_name,
             "ExtraInfo1": self.app.context.project['name'],
             "ExtraInfo2": "%s > %s" % (sequence_name, shot_name),
             "ExtraInfo3": "%s - %s - %s - v%03d" % (sequence_name, shot_name, output_type, tk_version),
@@ -322,11 +350,11 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "ExtraInfoKeyValue1": "Description=Pull",
             "ExtraInfoKeyValue2": "ProjectName=%s" % self.app.context.project['name'], 
             "ExtraInfoKeyValue3": "EntityName=%s > %s" % (sequence_name, shot_name),
-            "ExtraInfoKeyValue4": "TaskName=Compositing",
+            "ExtraInfoKeyValue4": "TaskName=%s" % step_name,
             "ExtraInfoKeyValue5": "EntityType=%s" % entity_type,
             "ExtraInfoKeyValue6": "ProjectId=%i" % self.app.context.project['id'],
             "ExtraInfoKeyValue7": "EntityId=%i" % entity_id,
-            "ExtraInfoKeyValue8": "TaskId=Notask", # could I have a task ? I should then find a way to create the task
+            "ExtraInfoKeyValue8": "TaskId=%s" % task_id,
             "ExtraInfoKeyValue9": "ProjectDirectory=%s" % project_directory,
             "ExtraInfoKeyValue10": "context=%s" % ctx.serialize(with_user_credentials=False, use_json=True),
             "ExtraInfoKeyValue11": "PublishInfo=%s" % publish_info,
@@ -368,6 +396,9 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
 
         # Submit job to deadline using the deadline API
         job = self.deadlineApiCon.Jobs.SubmitJob(JobInfo, PluginInfo)
+
+        if sg_task:
+            self.app.shotgun.update("Task", sg_task["id"], {'sg_status_list':'ip'})
 
         return job["_id"]
 
