@@ -293,11 +293,17 @@ class ShotgunShotUpdater(
         sg_shot["sg_record_out_timecode"] = rec_out_timecode
 
 
-        # Donat : add tags
-        sg_tags = []
+        # Donat : add tags.
+        # Add possible tags attached to the track item to the possible projects tags
+        # that we might have in SG on an already existing shot
+        if sg_shot.get("sg_project_tags"):
+            sg_tags = sg_shot.get("sg_project_tags")
+        else: 
+            sg_tags = []
+
         tags_app = self.app.engine.apps.get("tk-hiero-tags")
         if tags_app:
-            sg_tags = tags_app.get_sg_tags(self._item)
+            sg_tags.extend(tags_app.get_sg_tags(self._item))
             sg_shot["sg_project_tags"] = sg_tags
         else:
             self.app.log_debug("The 'tk-hiero-tags' app is not running. Will not send tags to SG")
