@@ -124,7 +124,8 @@ class ShotgunHieroObjectBase(object):
             # but that's safe here because we only support Hiero/NS versions that
             # come bundled with 2.7.
             cache = self._custom_properties.setdefault(
-                get_method, collections.OrderedDict(),
+                get_method,
+                collections.OrderedDict(),
             )
 
             for prop_data in hook_ui_properties:
@@ -147,8 +148,7 @@ class ShotgunHieroObjectBase(object):
         return hook_widget
 
     def _formatTkVersionString(self, hiero_version_str):
-        """Reformat the Hiero version string to the tk format.
-        """
+        """Reformat the Hiero version string to the tk format."""
         try:
             version_number = int(hiero_version_str[1:])
         except ValueError:
@@ -182,7 +182,7 @@ class ShotgunHieroObjectBase(object):
             self.app.shotgun.upload_thumbnail(sg_entity["type"], sg_entity["id"], path)
         except Exception as e:
             self.app.log_info(
-                "Thumbnail for %s %s (#%s) was not refreshed in ShotGrid: %s"
+                "Thumbnail for %s %s (#%s) was not refreshed in Flow Production Tracking: %s"
                 % (sg_entity["type"], sg_entity.get("name"), sg_entity["id"], e)
             )
         finally:

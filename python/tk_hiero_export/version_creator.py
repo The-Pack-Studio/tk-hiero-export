@@ -49,7 +49,7 @@ class ShotgunTranscodeExporterUI(ShotgunHieroObjectBase, FnTranscodeExporterUI.T
 
     def __init__(self, preset):
         FnTranscodeExporterUI.TranscodeExporterUI.__init__(self, preset)
-        self._displayName = "SG Transcode Images"
+        self._displayName = "PTR Transcode Images"
         self._taskType = ShotgunTranscodeExporter
 
     def create_version_changed(self, state):
@@ -72,14 +72,12 @@ class ShotgunTranscodeExporterUI(ShotgunHieroObjectBase, FnTranscodeExporterUI.T
 
         top_layout = QtGui.QVBoxLayout()
         top_layout.setContentsMargins(9, 0, 9, 0)
-        create_version_checkbox = QtGui.QCheckBox("Create SG Version", widget)
+        create_version_checkbox = QtGui.QCheckBox("Create PTR Version", widget)
         create_version_checkbox.setToolTip(
-            "Create a Version in SG for this transcode.\n\n"
+            "Create a Version in PTR for this transcode.\n\n"
             "If the output format is not a quicktime, then\n"
             "a quicktime will be created.  The quicktime will\n"
-            "be uploaded to SG as Screening Room media.\n"
-            "This option will be ignored if the export is\n"
-            "submitted to Deadline"
+            "be uploaded to PTR as Screening Room media."
         )
 
         create_version_checkbox.setCheckState(QtCore.Qt.Checked)
@@ -128,7 +126,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
     _write_set_node_label = "SG_Write_Attachment"
 
     def __init__(self, initDict):
-        """ Constructor """
+        """Constructor"""
         FnTranscodeExporter.TranscodeExporter.__init__(self, initDict)
         CollatingExporter.__init__(self)
         self._resolved_export_path = None
@@ -187,7 +185,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
 
         self._quicktime_path = os.path.join(tempfile.mkdtemp(), "preview.mov")
         self._temp_quicktime = True
-        nodeName = "SG Screening Room Media"
+        nodeName = "PTR Screening Room Media"
 
         framerate = None
         if self._sequence:
@@ -207,7 +205,10 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
         )
         self.app.log_info("Transcode quicktime settings: %s" % (properties,))
         preset.properties().update(
-            {"file_type": file_type, file_type: properties,}
+            {
+                "file_type": file_type,
+                file_type: properties,
+            }
         )
 
         # Sadly Foundry has a habit of changing the interfaces of
@@ -278,7 +279,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
         return result
 
     def startTask(self):
-        """ Run Task """
+        """Run Task"""
         if self._resolved_export_path is None:
             self._resolved_export_path = self.resolvedExportPath()
             self._tk_version = self._formatTkVersionString(self.versionString())
@@ -403,7 +404,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
         return FnTranscodeExporter.TranscodeExporter.startTask(self)
 
     def finishTask(self):
-        """ Finish Task """
+        """Finish Task"""
         # run base class implementation
         FnTranscodeExporter.TranscodeExporter.finishTask(self)
 
@@ -446,7 +447,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
         pub_data = tank.util.register_publish(**args)
         if self._extra_publish_data is not None:
             self.app.log_debug(
-                "Updating SG %s %s"
+                "Updating PTR %s %s"
                 % (published_file_entity_type, str(self._extra_publish_data))
             )
             self.app.shotgun.update(
@@ -471,12 +472,13 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
             else:  # == "TankPublishedFile
                 self._version_data["tank_published_file"] = pub_data
 
-            self.app.log_debug("Creating SG Version %s" % str(self._version_data))
+            self.app.log_debug("Creating PTR Version %s" % str(self._version_data))
             vers = self.app.shotgun.create("Version", self._version_data)
 
             if os.path.exists(self._quicktime_path):
                 self.app.log_debug(
-                    "Uploading quicktime to ShotGrid... (%s)" % self._quicktime_path
+                    "Uploading quicktime to Flow Production Tracking... (%s)"
+                    % self._quicktime_path
                 )
                 self.app.shotgun.upload(
                     "Version", vers["id"], self._quicktime_path, "sg_uploaded_movie"
@@ -522,8 +524,10 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
             pass
 
 
-class ShotgunTranscodePreset(ShotgunHieroObjectBase, FnTranscodeExporter.TranscodePreset, CollatedShotPreset):
-    """ Settings for the SG transcode step """
+class ShotgunTranscodePreset(
+    ShotgunHieroObjectBase, FnTranscodeExporter.TranscodePreset, CollatedShotPreset
+):
+    """Settings for the PTR transcode step"""
 
     def __init__(self, name, properties):
         FnTranscodeExporter.TranscodePreset.__init__(self, name, properties)
