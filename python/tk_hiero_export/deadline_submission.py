@@ -135,7 +135,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             task=self,
             item=self._item,
             data=self.app.preprocess_data,
-            fields=["code", "sg_cut_in", "sg_cut_out", "sg_sequence"],
+            fields=["code", "sg_cut_in", "sg_cut_out", "sg_sequence", "sg_sequence.Sequence.episode"],
             base_class=HieroGetShot,
         )
 
@@ -144,6 +144,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         entity_id = _sg_shot['id']
         shot_name = _sg_shot["code"]
         sequence_name = _sg_shot["sg_sequence"]["name"]
+        episode_name = _sg_shot.get("sg_sequence.Sequence.episode", {}).get("name")
 
 
         # Publish information
@@ -341,15 +342,15 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
             "UserName": userlogin,
             "ExtraInfo0": step_name,
             "ExtraInfo1": self.app.context.project['name'],
-            "ExtraInfo2": "%s > %s" % (sequence_name, shot_name),
-            "ExtraInfo3": "%s - %s - %s - v%03d" % (sequence_name, shot_name, output_type, tk_version),
+            "ExtraInfo2": "%s-%s-%s" % (episode_name, sequence_name, shot_name),
+            "ExtraInfo3": "%s-%s-%s %s v%03d" % (episode_name, sequence_name, shot_name, output_type, tk_version),
             "ExtraInfo4": "Pull",
             "ExtraInfo5": userlogin,
             "EnvironmentKeyValue0": "NOZ_TK_CONFIG_PATH=%s" % pc_path,
             "ExtraInfoKeyValue0": "UserName=%s" %  userlogin,
             "ExtraInfoKeyValue1": "Description=Pull",
             "ExtraInfoKeyValue2": "ProjectName=%s" % self.app.context.project['name'], 
-            "ExtraInfoKeyValue3": "EntityName=%s > %s" % (sequence_name, shot_name),
+            "ExtraInfoKeyValue3": "EntityName=%s-%s-%s" % (episode_name, sequence_name, shot_name),
             "ExtraInfoKeyValue4": "TaskName=%s" % step_name,
             "ExtraInfoKeyValue5": "EntityType=%s" % entity_type,
             "ExtraInfoKeyValue6": "ProjectId=%i" % self.app.context.project['id'],
