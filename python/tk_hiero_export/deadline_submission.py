@@ -144,7 +144,9 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
         entity_id = _sg_shot['id']
         shot_name = _sg_shot["code"]
         sequence_name = _sg_shot["sg_sequence"]["name"]
-        episode_name = _sg_shot.get("sg_sequence.Sequence.episode", {}).get("name")
+        episode_name = None
+        if _sg_shot.get("sg_sequence.Sequence.episode"):
+            episode_name = _sg_shot.get("sg_sequence.Sequence.episode").get("name")
 
 
         # Publish information
@@ -512,7 +514,7 @@ class ShotgunDeadlineRenderSubmission(ShotgunHieroObjectBase, Submission):
 
         # Set up the other default arrays.
         onJobComplete = ("Nothing","Archive","Delete")
-        nukeVersions = ("11.0","11.1", "11.2", "11.3", "12.1", "12.2", "13.0", "13.1", "13.2", "14.0", "14.1", "15.0")
+        nukeVersions = ("13.0", "13.1", "13.2", "14.0", "14.1", "15.0", "15.1", "15.2")
         running_nukestudio_version = "%s.%s" % (hiero.core.env["VersionMajor"], hiero.core.env["VersionMinor"])
         buildsToForce = ("None","32bit","64bit")
         

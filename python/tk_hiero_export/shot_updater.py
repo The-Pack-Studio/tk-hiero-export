@@ -456,9 +456,10 @@ class ShotgunShotUpdater(
 
         fps = trackItem.parent().parent().framerate()
         clip = trackItem.source()
-        clipstartTimeCode = clip.timecodeStart()
-        source_in_timecode = hiero.core.Timecode.timeToString(clipstartTimeCode+trackItem.sourceIn(), fps, hiero.core.Timecode.kDisplayTimecode)
-        
+        clipstartTimeCode = int(round(clip.timecodeStart()))
+        timeCodeOffset = int(round(trackItem.sourceIn()))
+        source_in_timecode = hiero.core.Timecode.timeToString(clipstartTimeCode+timeCodeOffset, fps, hiero.core.Timecode.kDisplayTimecode)
+
         return source_in_timecode
 
 
