@@ -271,6 +271,7 @@ class ShotgunDeadlineRenderTask(ShotgunHieroObjectBase, hiero.core.TaskBase):
 
         job_opt_ins = []
         job_opt_ins.append("NozMov2EventPlugin")
+        job_opt_ins.append("Shotgun")
         # Opt-in to the CreateFirstCompOutputEvent only if it has been selected in the submission settings
         # and if the plate type and template are right. Add copyFirstCompToLatest if necessary
         copyFirstCompToLatest = "false"
