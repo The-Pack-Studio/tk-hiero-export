@@ -116,7 +116,9 @@ class ShotgunTranscodeExporterUI(ShotgunHieroObjectBase, FnTranscodeExporterUI.T
             layout.addWidget(custom_widget)
 
 
-class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.TranscodeExporter, CollatingExporter):
+class ShotgunTranscodeExporter(
+    ShotgunHieroObjectBase, FnTranscodeExporter.TranscodeExporter, CollatingExporter
+):
     """
     Create Transcode object and send to Shotgun
     """
@@ -215,7 +217,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
         # their Python classes out from under us, so now we're going
         # to have to handle this the ugly way, via introspecting the
         # arguments expected by the createWriteNode method.
-        arg_spec = inspect.getargspec(FnExternalRender.createWriteNode)
+        arg_spec = inspect.getfullargspec(FnExternalRender.createWriteNode)
         if "projectsettings" in arg_spec.args:
             kwargs = dict(
                 path=self._quicktime_path,
@@ -525,7 +527,7 @@ class ShotgunTranscodeExporter(ShotgunHieroObjectBase, FnTranscodeExporter.Trans
 
 
 class ShotgunTranscodePreset(
-    ShotgunHieroObjectBase, FnTranscodeExporter.TranscodePreset, CollatedShotPreset
+    ShotgunHieroObjectBase, CollatedShotPreset, FnTranscodeExporter.TranscodePreset
 ):
     """Settings for the PTR transcode step"""
 
