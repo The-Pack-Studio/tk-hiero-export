@@ -312,6 +312,10 @@ class ShotgunShotUpdater(
         else:
             self.app.log_debug("The 'tk-hiero-tags' app is not running. Will not send tags to SG")
 
+        # Determine the camera colorspace, starting by getting the colorspace of the hiero track item
+        read_node = self._item.source().readNode()
+        camera_colorspace = self.csp.ColorSpace().get_read_colorspace_name(read_node)
+
         # Shotlook app
         shotlook_app = self.app.engine.apps.get("tk-nukestudio-shotlook")
         if shotlook_app:
@@ -320,22 +324,20 @@ class ShotgunShotUpdater(
             if shotlook_effect:
                 self.app.log_debug("Found a Shotlook effect: %s. Adding lut info to the shot" % shotlook_effect.name())
                 sg_shot["sg_shot_lut"] = shotlook_app.get_lut_name(self._item)
+                # Get the working colorspace from the Shotlook effect, overriding the colorspace of the source clip
+                camera_colorspace = shotlook_app.get_working_colorspace(self._item)
                 sg_shot["sg_review_colorspace"] = SHOTGRADE
                 # create/export the CDL file
                 export_cdl = shotlook_app.export_cdl(self._item)
                 if export_cdl:
                     self.app.log_debug("Exported CDL file on disk")
 
-
-        # Donat add the colorspace of the clip's to the camera colorspace in SG database
-        read_node = self._item.source().readNode()
-        clip_source_colorspace = self.csp.ColorSpace().get_read_colorspace_name(read_node)
         # fetch valid values configured on the sg_camera_colorspace
         valid_shotgun_colorspaces = self.app.shotgun.schema_field_read('Shot', 'sg_camera_colorspace')['sg_camera_colorspace']['properties']['valid_values']['value']
-        if clip_source_colorspace in valid_shotgun_colorspaces:
-            sg_shot["sg_camera_colorspace"] = clip_source_colorspace
+        if camera_colorspace in valid_shotgun_colorspaces:
+            sg_shot["sg_camera_colorspace"] = camera_colorspace
         else:
-            self.app.log_debug("The clip source colorspace: %s is not found on the list of colorspace values in SG : %s" % (clip_source_colorspace, valid_shotgun_colorspaces))
+            self.app.log_debug("The colorspace: %s is not found on the list of colorspace values in SG : %s" % (camera_colorspace, valid_shotgun_colorspaces))
 
 
         # get status from the hiero tags
